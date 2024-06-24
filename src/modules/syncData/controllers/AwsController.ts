@@ -3,10 +3,10 @@ import { AwsService } from '../services/AwsService';
 
 @Controller('aws')
 export class AwsController {
-  constructor(private awservice: AwsService) {}
+  constructor(private awservice: AwsService) { }
 
   @Get()
-  async getAccess() {
-    return await this.awservice.getOrder();
+  async syncOrders() {
+    return await this.awservice.syncOrders();
   }
 }
