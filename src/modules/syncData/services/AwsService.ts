@@ -5,10 +5,14 @@ import { AwsOrder, Product } from '../model/Aws';
 
 @Injectable()
 export class AwsService {
+    private now: string;
+    private yesterday: string;
     private endpoint: string;
     private marketplaceId: string;
 
     constructor() {
+        this.now = moment.tz('Europe/London').format('YYYY-MM-DD');
+        this.yesterday = moment.tz('Europe/London').subtract(1, 'days').format('YYYY-MM-DD');
         this.endpoint = process.env.AWS_ENDPOINT;
         this.marketplaceId = process.env.AWS_MARKETPLACE_ID;
     }
@@ -32,13 +36,13 @@ export class AwsService {
     }
 
     async syncOrders() {
-        //   this.access = await this.getAccessToken(process.env.AWS_KEY_FUSION);
+        const accessToken = await this.getAccessToken(process.env.AWS_KEY_DEMIE);
         const orders: AwsOrder[] = [];
-        const _orders = await this.getOrders();
+        const _orders = await this.getOrders(accessToken);
 
         await Promise.all(
             _orders.map(async (order) => {
-                const orderItems = await this.getOrderItems(order.AmazonOrderId);
+                const orderItems = await this.getOrderItems(order.AmazonOrderId, accessToken);
                 const formattedOrderItems: Product[] = orderItems.map((item) => ({
                     Id: item.OrderItemId,
                     Name: item.Title,
@@ -64,27 +68,27 @@ export class AwsService {
         return orders;
     }
 
-    async getOrders() {
-        let nextToken = null;
+    async getOrders(access: string) {
+        let nextToken: string | undefined = undefined;
         let allOrders = [];
-        const yesterday = moment.tz('Europe/London').subtract(2, 'days').format('YYYY-MM-DD');
 
         do {
             try {
                 const response = await axios.get(`${this.endpoint}/orders/v0/orders`, {
                     params: {
                         MarketplaceIds: this.marketplaceId,
-                        CreatedAfter: yesterday,
+                        CreatedBefore: this.now,
+                        CreatedAfter: this.yesterday,
                         NextToken: nextToken,
                     },
                     headers: {
-                        'x-amz-access-token': `Atza|IwEBIOYVNgunlM3Y-T_Bqchi6B8M8JecaU7cN06cjViOOG3hUSOvM39miYYy0Fq29pSO4PBm2FXBHsWSBeu06rnhTBdJ6NR0OOoJazrh04Q12InbirNA_VeujXoLpBoltQ_HmSGUVIu63zarak2R-OE2B82Jrhetty38aeDGz5iFrG7Xbht50gO6z-DmugsNGEZTl-FYyOCo1Z6K0nU-ea3iChpqmWBiuV_FGjiD8f4BbQR8swQk5JTvbxN4Dy5El6kOO4kuQj0xPvePsSCE5ZlW2v9kFPDwaz1cBHDuF7ymv0kIhbkrPz6SEHUZwvss7EpM70J5a6s5cIxT05a6UXSpGUCH20d8FeK7cJlXt7dK7nV46g`,
+                        'x-amz-access-token': `${access}`,
                     },
                 });
 
                 const orders = response.data.payload.Orders || [];
                 allOrders = allOrders.concat(orders);
-                nextToken = response.data.NextToken || null;
+                nextToken = response.data.payload.NextToken || undefined;
             } catch (error) {
                 console.error('Error syncing sale:', error);
             }
@@ -93,11 +97,11 @@ export class AwsService {
         return allOrders;
     }
 
-    private async getOrderItems(orderId: string) {
+    private async getOrderItems(orderId: string, access: string) {
         try {
             const response = await axios.get(`${this.endpoint}/orders/v0/orders/${orderId}/orderItems`, {
                 headers: {
-                    'x-amz-access-token': `Atza|IwEBIOYVNgunlM3Y-T_Bqchi6B8M8JecaU7cN06cjViOOG3hUSOvM39miYYy0Fq29pSO4PBm2FXBHsWSBeu06rnhTBdJ6NR0OOoJazrh04Q12InbirNA_VeujXoLpBoltQ_HmSGUVIu63zarak2R-OE2B82Jrhetty38aeDGz5iFrG7Xbht50gO6z-DmugsNGEZTl-FYyOCo1Z6K0nU-ea3iChpqmWBiuV_FGjiD8f4BbQR8swQk5JTvbxN4Dy5El6kOO4kuQj0xPvePsSCE5ZlW2v9kFPDwaz1cBHDuF7ymv0kIhbkrPz6SEHUZwvss7EpM70J5a6s5cIxT05a6UXSpGUCH20d8FeK7cJlXt7dK7nV46g`,
+                    'x-amz-access-token': `${access}`,
                 },
             });
             return response.data.payload.OrderItems || [];
